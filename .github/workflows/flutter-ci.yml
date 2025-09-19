@@ -1,11 +1,8 @@
-name: flutter-ci
+name: build
 
 on:
   push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
-  workflow_dispatch:
+    branches: [ "main" ]
 
 permissions:
   contents: write
@@ -15,53 +12,57 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v4
-      - uses: subosito/flutter-action@v2
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
         with:
           channel: stable
-      - run: flutter --version
-      - run: flutter create .
-      - run: flutter pub get
-      - run: rm -rf test
-      - run: flutter analyze --no-fatal-infos --no-fatal-warnings lib
-      - run: flutter build apk --release
-      - run: flutter build web --release --dart-define=API_BASE_URL=${{ secrets.API_BASE_URL || 'http://localhost:4000' }}
-      - uses: actions/upload-artifact@v4
+
+      - name: Flutter version
+        run: flutter --version
+
+      - name: Create platforms
+        run: flutter create .
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Analyze
+        run: |
+          rm -rf test
+          flutter analyze --no-fatal-infos --no-fatal-warnings lib
+
+      - name: Build APK
+        run: flutter build apk --release
+
+      - name: Build Web
+        run: flutter build web --release --dart-define=API_BASE_URL=${{ secrets.API_BASE_URL }}
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
         with:
-          name: arabchat-apk
+          name: app-release-apk
           path: build/app/outputs/flutter-apk/app-release.apk
+
+      - name: Upload Web artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-build
+          path: build/web
+
       - name: Setup Pages
         uses: actions/configure-pages@v5
-      with:
-        enablement: true
-      - name: Upload web artifact
+        with:
+          enablement: true
+
+      - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
           path: build/web
-  deploy-pages:
-    needs: build
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
+
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
-  release:
-    needs: build
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          name: arabchat-apk
-          path: dist
-      - uses: softprops/action-gh-release@v2
-        with:
-          tag_name: v${{ github.run_number }}
-          name: ArabChat v${{ github.run_number }}
-          files: |
-            dist/app-release.apk
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
